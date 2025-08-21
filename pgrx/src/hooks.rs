@@ -158,14 +158,16 @@ pub trait PgHooks {
         query_string: *const std::os::raw::c_char,
         cursor_options: i32,
         bound_params: PgBox<pg_sys::ParamListInfoData>,
+        optimizer_options: *mut pg_sys::OptimizerOptions,
         prev_hook: fn(
             parse: PgBox<pg_sys::Query>,
             query_string: *const std::os::raw::c_char,
             cursor_options: i32,
             bound_params: PgBox<pg_sys::ParamListInfoData>,
+            optimizer_options: *mut pg_sys::OptimizerOptions,
         ) -> HookResult<*mut pg_sys::PlannedStmt>,
     ) -> HookResult<*mut pg_sys::PlannedStmt> {
-        prev_hook(parse, query_string, cursor_options, bound_params)
+        prev_hook(parse, query_string, cursor_options, bound_params, optimizer_options)
     }
 
     fn post_parse_analyze(
@@ -485,7 +487,7 @@ unsafe extern "C" fn pgrx_planner(
     cursor_options: i32,
     bound_params: pg_sys::ParamListInfo,
 ) -> *mut pg_sys::PlannedStmt {
-    pgrx_planner_impl(parse, std::ptr::null(), cursor_options, bound_params)
+    pgrx_planner_impl(parse, std::ptr::null(), cursor_options, bound_params, std::ptr::null_mut())
 }
 
 #[cfg(any(
@@ -501,8 +503,9 @@ unsafe extern "C" fn pgrx_planner(
     query_string: *const ::std::os::raw::c_char,
     cursor_options: i32,
     bound_params: pg_sys::ParamListInfo,
+    optimizer_options: *mut pg_sys::OptimizerOptions,
 ) -> *mut pg_sys::PlannedStmt {
-    pgrx_planner_impl(parse, query_string, cursor_options, bound_params)
+    pgrx_planner_impl(parse, query_string, cursor_options, bound_params, optimizer_options)
 }
 
 #[pg_guard]
@@ -511,12 +514,14 @@ unsafe extern "C" fn pgrx_planner_impl(
     query_string: *const ::std::os::raw::c_char,
     cursor_options: i32,
     bound_params: pg_sys::ParamListInfo,
+    optimizer_options: *mut pg_sys::OptimizerOptions,
 ) -> *mut pg_sys::PlannedStmt {
     fn prev(
         parse: PgBox<pg_sys::Query>,
         #[allow(unused_variables)] query_string: *const ::std::os::raw::c_char,
         cursor_options: i32,
         bound_params: PgBox<pg_sys::ParamListInfoData>,
+        #[allow(unused_variables)] optimizer_options: *mut pg_sys::OptimizerOptions,
     ) -> HookResult<*mut pg_sys::PlannedStmt> {
         HookResult::new(unsafe {
             #[cfg(feature = "pg12")]
@@ -541,6 +546,7 @@ unsafe extern "C" fn pgrx_planner_impl(
                     query_string,
                     cursor_options,
                     bound_params.into_pg(),
+                    optimizer_options,
                 )
             }
         })
@@ -551,6 +557,7 @@ unsafe extern "C" fn pgrx_planner_impl(
         query_string,
         cursor_options,
         PgBox::from_pg(bound_params),
+        optimizer_options,
         prev,
     )
     .inner
@@ -742,6 +749,7 @@ unsafe extern "C" fn pgrx_standard_planner_wrapper(
     query_string: *const ::std::os::raw::c_char,
     cursor_options: i32,
     bound_params: pg_sys::ParamListInfo,
+    optimizer_options: *mut pg_sys::OptimizerOptions,
 ) -> *mut pg_sys::PlannedStmt {
-    pg_sys::standard_planner(parse, query_string, cursor_options, bound_params)
+    pg_sys::standard_planner(parse, query_string, cursor_options, bound_params, optimizer_options)
 }

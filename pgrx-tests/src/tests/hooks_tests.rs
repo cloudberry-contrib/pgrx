@@ -96,15 +96,17 @@ mod tests {
                 query_string: *const std::os::raw::c_char,
                 cursor_options: i32,
                 bound_params: PgBox<ParamListInfoData>,
+                optimizer_options: *mut pg_sys::OptimizerOptions,
                 prev_hook: fn(
                     PgBox<Query>,
                     query_string: *const std::os::raw::c_char,
                     i32,
                     PgBox<ParamListInfoData>,
+                    *mut pg_sys::OptimizerOptions,
                 ) -> HookResult<*mut PlannedStmt>,
             ) -> HookResult<*mut PlannedStmt> {
                 self.events += 1;
-                prev_hook(parse, query_string, cursor_options, bound_params)
+                prev_hook(parse, query_string, cursor_options, bound_params, optimizer_options)
             }
 
             fn post_parse_analyze(
