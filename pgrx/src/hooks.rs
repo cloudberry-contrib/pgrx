@@ -199,6 +199,7 @@ pub trait PgHooks {
     }
 
     /// Hook for plugins to get control of the planner
+    #[cfg(not(feature = "cbdb"))]
     fn planner(
         &mut self,
         parse: PgBox<pg_sys::Query>,
@@ -213,6 +214,26 @@ pub trait PgHooks {
         ) -> HookResult<*mut pg_sys::PlannedStmt>,
     ) -> HookResult<*mut pg_sys::PlannedStmt> {
         prev_hook(parse, query_string, cursor_options, bound_params)
+    }
+
+    /// Hook for plugins to get control of the planner (CBDB version with OptimizerOptions)
+    #[cfg(feature = "cbdb")]
+    fn planner(
+        &mut self,
+        parse: PgBox<pg_sys::Query>,
+        query_string: *const std::os::raw::c_char,
+        cursor_options: i32,
+        bound_params: PgBox<pg_sys::ParamListInfoData>,
+        optimizer_options: *mut pg_sys::OptimizerOptions,
+        prev_hook: fn(
+            parse: PgBox<pg_sys::Query>,
+            query_string: *const std::os::raw::c_char,
+            cursor_options: i32,
+            bound_params: PgBox<pg_sys::ParamListInfoData>,
+            optimizer_options: *mut pg_sys::OptimizerOptions,
+        ) -> HookResult<*mut pg_sys::PlannedStmt>,
+    ) -> HookResult<*mut pg_sys::PlannedStmt> {
+        prev_hook(parse, query_string, cursor_options, bound_params, optimizer_options)
     }
 
     fn post_parse_analyze(
@@ -591,6 +612,7 @@ unsafe extern "C-unwind" fn pgrx_process_utility(
     .inner
 }
 
+#[cfg(not(feature = "cbdb"))]
 #[pg_guard]
 unsafe extern "C-unwind" fn pgrx_planner(
     parse: *mut pg_sys::Query,
@@ -601,6 +623,19 @@ unsafe extern "C-unwind" fn pgrx_planner(
     pgrx_planner_impl(parse, query_string, cursor_options, bound_params)
 }
 
+#[cfg(feature = "cbdb")]
+#[pg_guard]
+unsafe extern "C-unwind" fn pgrx_planner(
+    parse: *mut pg_sys::Query,
+    query_string: *const ::std::os::raw::c_char,
+    cursor_options: i32,
+    bound_params: pg_sys::ParamListInfo,
+    optimizer_options: *mut pg_sys::OptimizerOptions,
+) -> *mut pg_sys::PlannedStmt {
+    pgrx_planner_impl(parse, query_string, cursor_options, bound_params, optimizer_options)
+}
+
+#[cfg(not(feature = "cbdb"))]
 #[pg_guard]
 unsafe extern "C-unwind" fn pgrx_planner_impl(
     parse: *mut pg_sys::Query,
@@ -629,6 +664,44 @@ unsafe extern "C-unwind" fn pgrx_planner_impl(
         query_string,
         cursor_options,
         PgBox::from_pg(bound_params),
+        prev,
+    )
+    .inner
+}
+
+#[cfg(feature = "cbdb")]
+#[pg_guard]
+unsafe extern "C-unwind" fn pgrx_planner_impl(
+    parse: *mut pg_sys::Query,
+    query_string: *const ::std::os::raw::c_char,
+    cursor_options: i32,
+    bound_params: pg_sys::ParamListInfo,
+    optimizer_options: *mut pg_sys::OptimizerOptions,
+) -> *mut pg_sys::PlannedStmt {
+    fn prev(
+        parse: PgBox<pg_sys::Query>,
+        #[allow(unused_variables)] query_string: *const ::std::os::raw::c_char,
+        cursor_options: i32,
+        bound_params: PgBox<pg_sys::ParamListInfoData>,
+        optimizer_options: *mut pg_sys::OptimizerOptions,
+    ) -> HookResult<*mut pg_sys::PlannedStmt> {
+        HookResult::new(unsafe {
+            (HOOKS.as_mut().unwrap().prev_planner_hook.as_ref().unwrap())(
+                parse.into_pg(),
+                query_string,
+                cursor_options,
+                bound_params.into_pg(),
+                optimizer_options,
+            )
+        })
+    }
+    let hook = &mut HOOKS.as_mut().unwrap().current_hook;
+    hook.planner(
+        PgBox::from_pg(parse),
+        query_string,
+        cursor_options,
+        PgBox::from_pg(bound_params),
+        optimizer_options,
         prev,
     )
     .inner
@@ -844,6 +917,7 @@ unsafe extern "C-unwind" fn pgrx_standard_process_utility_wrapper(
     )
 }
 
+#[cfg(not(feature = "cbdb"))]
 #[pg_guard]
 unsafe extern "C-unwind" fn pgrx_standard_planner_wrapper(
     parse: *mut pg_sys::Query,
@@ -852,4 +926,16 @@ unsafe extern "C-unwind" fn pgrx_standard_planner_wrapper(
     bound_params: pg_sys::ParamListInfo,
 ) -> *mut pg_sys::PlannedStmt {
     pg_sys::standard_planner(parse, query_string, cursor_options, bound_params)
+}
+
+#[cfg(feature = "cbdb")]
+#[pg_guard]
+unsafe extern "C-unwind" fn pgrx_standard_planner_wrapper(
+    parse: *mut pg_sys::Query,
+    query_string: *const ::std::os::raw::c_char,
+    cursor_options: i32,
+    bound_params: pg_sys::ParamListInfo,
+    optimizer_options: *mut pg_sys::OptimizerOptions,
+) -> *mut pg_sys::PlannedStmt {
+    pg_sys::standard_planner(parse, query_string, cursor_options, bound_params, optimizer_options)
 }
