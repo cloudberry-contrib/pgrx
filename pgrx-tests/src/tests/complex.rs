@@ -42,11 +42,14 @@ extension_sql!(
 
 unsafe impl SqlTranslatable for Complex {
     fn argument_sql() -> Result<SqlMapping, ArgumentError> {
-        Ok(SqlMapping::literal("Complex"))
+        // Schema-qualified: Cloudberry ships a builtin `pg_catalog.complex` type, which
+        // (being in pg_catalog, always implicitly first in the search_path) would otherwise
+        // shadow this test fixture's own `public.complex` shell type.
+        Ok(SqlMapping::literal("public.Complex"))
     }
 
     fn return_sql() -> Result<Returns, ReturnsError> {
-        Ok(Returns::One(SqlMapping::literal("Complex")))
+        Ok(Returns::One(SqlMapping::literal("public.Complex")))
     }
 }
 
@@ -78,8 +81,8 @@ extension_sql!(
     r#"
 CREATE TYPE complex (
    internallength = 16,
-   input = complex_in,
-   output = complex_out,
+   input = public.complex_in,
+   output = public.complex_out,
    alignment = double
 );
 "#,

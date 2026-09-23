@@ -399,7 +399,20 @@ macro_rules! impl_table_iter {
                     // SAFETY:  Caller has asserted that `tupdesc` is valid, and we just went
                     // through a little bit of effort to setup properly sized arrays for
                     // `datums` and `nulls`
-                    pg_sys::heap_form_tuple(tupdesc, datums.as_mut_ptr(), nulls.as_mut_ptr())
+                    #[cfg(not(feature = "cbdb"))]
+                    {
+                        pg_sys::heap_form_tuple(tupdesc, datums.as_mut_ptr(), nulls.as_mut_ptr())
+                    }
+                    #[cfg(feature = "cbdb")]
+                    {
+                        pg_sys::heaptuple_form_to(
+                            tupdesc,
+                            datums.as_mut_ptr(),
+                            nulls.as_mut_ptr(),
+                            std::ptr::null_mut(),
+                            std::ptr::null_mut(),
+                        )
+                    }
                 }
             }
         }

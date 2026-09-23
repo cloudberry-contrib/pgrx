@@ -284,6 +284,19 @@ macro_rules! pg_magic_func {
                 indexmaxkeys: ::pgrx::pg_sys::INDEX_MAX_KEYS as i32,
                 namedatalen: ::pgrx::pg_sys::NAMEDATALEN as i32,
                 float8byval: cfg!(target_pointer_width = "64") as i32,
+                #[cfg(any(feature = "pg15", feature = "pg16", feature = "pg17"))]
+                abi_extra: {
+                    // we'll use what the bindings tell us, but if it ain't "PostgreSQL" then we'll
+                    // raise a compilation error unless the `unsafe-postgres` feature is set
+                    let magic = ::pgrx::pg_sys::FMGR_ABI_EXTRA.to_bytes_with_nul();
+                    let mut abi = [0 as ::pgrx::ffi::c_char; 32];
+                    let mut i = 0;
+                    while i < magic.len() {
+                        abi[i] = magic[i] as ::pgrx::ffi::c_char;
+                        i += 1;
+                    }
+                    abi
+                },
                 product: ::pgrx::pg_sys::Pg_magic_product_code_PgMagicProductCloudberry as i32,
             };
 

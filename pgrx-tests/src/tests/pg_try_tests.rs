@@ -41,6 +41,11 @@ fn get_relation_name(oid: pg_sys::Oid) -> String {
         // so in the case the oid isn't a valid relation, just return a generic string
         format!("<{oid:?} is not a relation>")
     })
+    // Cloudberry's relation_open() raises ERRCODE_UNDEFINED_TABLE instead of
+    // ERRCODE_INTERNAL_ERROR for this same case.
+    .catch_when(PgSqlErrorCode::ERRCODE_UNDEFINED_TABLE, |_error| {
+        format!("<{oid:?} is not a relation>")
+    })
     .execute()
 }
 

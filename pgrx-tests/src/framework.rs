@@ -145,7 +145,16 @@ pub fn run_test(
             if let Some(Some(dberror)) = cause.map(|e| e.downcast_ref::<DbError>().cloned()) {
                 let received_error_message = dberror.message();
 
-                if Some(received_error_message) == expected_error {
+                #[cfg(not(feature = "cbdb"))]
+                let is_expected = Some(received_error_message) == expected_error;
+                // Cloudberry's assert-enabled builds append "(file:line)" onto error messages
+                // raised from a Rust panic, so an exact match against `expected` would never
+                // succeed; fall back to a substring match instead.
+                #[cfg(feature = "cbdb")]
+                let is_expected = expected_error
+                    .is_some_and(|expected| received_error_message.contains(expected));
+
+                if is_expected {
                     // the error received is the one we expected, so just return if they match
                     return Ok(());
                 }
@@ -487,6 +496,12 @@ fn modify_postgresql_conf(pgdata: PathBuf, postgresql_conf: Vec<&'static str>) -
     contents.push_str("log_line_prefix='[%m] [%p] [%c]: '\n");
     contents
         .push_str(&format!("unix_socket_directories = '{}'\n", pgdata.parent().unwrap().display()));
+    // pg_catalog is otherwise always implicitly searched first, ahead of any explicit
+    // search_path, which lets any of Cloudberry's builtin catalog objects silently shadow a
+    // same-named object (type, function, ...) the test suite creates in `public`. Naming
+    // pg_catalog explicitly here makes it take its written position instead.
+    #[cfg(feature = "cbdb")]
+    contents.push_str("search_path = 'public, pg_catalog'\n");
     for setting in postgresql_conf {
         contents.push_str(&format!("{setting}\n"));
     }
@@ -560,7 +575,17 @@ fn start_pg(loglines: LogLines) -> eyre::Result<String> {
         .arg("-p")
         .arg(pg_config.test_port().expect("unable to determine test port").to_string())
         // Redirecting logs to files can hang the test framework, override it
-        .args(["-c", "log_destination=stderr", "-c", "logging_collector=off"])
+        .args(["-c", "log_destination=stderr", "-c", "logging_collector=off"]);
+    #[cfg(feature = "cbdb")]
+    command.args([
+        // Cloudberry requires an explicit segment identity even for a single-node
+        // dev/test instance; -1 is the coordinator's conventional contentid.
+        "-c",
+        "gp_dbid=1",
+        "-c",
+        "gp_contentid=-1",
+    ]);
+    command
         .stdout(Stdio::inherit())
         .stderr(Stdio::piped());
 

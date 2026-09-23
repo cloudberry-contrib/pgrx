@@ -446,10 +446,8 @@ macro_rules! check_for_interrupts {
         #[allow(unused_unsafe)]
         unsafe {
             if $crate::InterruptPending != 0 {
-                $crate::ProcessInterrupts(
-                    crate::memcxt::PgMemoryContexts::CurrentMemoryContext.pstrdup(file!()),
-                    line!() as i32,
-                );
+                let filename = ::std::ffi::CString::new(file!()).unwrap();
+                $crate::ProcessInterrupts(filename.as_ptr(), line!() as i32);
             }
         }
     };
