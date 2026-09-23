@@ -41,6 +41,7 @@ proptest = ["dep:proptest"]
 cshim = ["pgrx/cshim"]
 no-schema-generation = ["pgrx/no-schema-generation", "pgrx-macros/no-schema-generation"]
 nightly = ["pgrx/nightly"]
+cbdb = ["pgrx/cbdb"]
 
 [package.metadata.docs.rs]
 features = ["pg14", "proptest"]

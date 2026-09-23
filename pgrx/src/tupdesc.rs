@@ -164,8 +164,17 @@ impl<'a> PgTupleDesc<'a> {
     unsafe {
         let mut is_null = (0..natts).map(|_| true).collect::<Vec<_>>();
 
+        #[cfg(not(feature = "cbdb"))]
         let heap_tuple_data =
             pg_sys::heap_form_tuple(tuple_desc.as_ptr(), std::ptr::null_mut(), is_null.as_mut_ptr());
+        #[cfg(feature = "cbdb")]
+        let heap_tuple_data = pg_sys::heaptuple_form_to(
+            tuple_desc.as_ptr(),
+            std::ptr::null_mut(),
+            is_null.as_mut_ptr(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        );
 
         let heap_tuple = PgHeapTuple::from_heap_tuple(
             tuple_desc,
