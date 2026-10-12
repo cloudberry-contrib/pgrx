@@ -503,8 +503,12 @@ fn rewrite_oid_consts(
 fn format_builtin_oid_impl(oids: BTreeMap<syn::Ident, Box<syn::Expr>>) -> proc_macro2::TokenStream {
     let enum_variants: proc_macro2::TokenStream;
     let from_impl: proc_macro2::TokenStream;
+    // Some forks (e.g. Cloudberry) define several OID constants with the same value, which
+    // would give the enum duplicate discriminants, so only the first name for a value is kept
+    let mut seen = HashSet::new();
     (enum_variants, from_impl) = oids
         .iter()
+        .filter(|(_, expr)| seen.insert(expr.to_token_stream().to_string()))
         .map(|(ident, expr)| {
             (quote! { #ident = #expr, }, quote! { #expr => Ok(BuiltinOid::#ident), })
         })
