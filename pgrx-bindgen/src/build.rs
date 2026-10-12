@@ -495,14 +495,24 @@ fn rewrite_oid_consts(
 }
 
 fn format_builtin_oid_impl(oids: BTreeMap<syn::Ident, Box<syn::Expr>>) -> proc_macro2::TokenStream {
-    let enum_variants: proc_macro2::TokenStream;
-    let from_impl: proc_macro2::TokenStream;
-    (enum_variants, from_impl) = oids
-        .iter()
-        .map(|(ident, expr)| {
-            (quote! { #ident = #expr, }, quote! { #expr => Ok(BuiltinOid::#ident), })
-        })
-        .unzip();
+    // Some forks (e.g. Cloudberry's PAX table AM) define more than one C
+    // symbol for the same underlying OID value (`EXT_PAX_TABLE_AM_OID` and
+    // `PAX_AM_OID` are both `7047`). `oids` is keyed by identifier, so both
+    // survive into this map, but an enum can't have two variants with the
+    // same explicit discriminant. Keep only the first name (BTreeMap iterates
+    // in ident order) for each distinct value; the rest still get rewritten
+    // to plain `Oid` constants elsewhere, they just don't get their own
+    // BuiltinOid variant.
+    let mut seen_values = std::collections::BTreeSet::new();
+    let mut enum_variants = proc_macro2::TokenStream::new();
+    let mut from_impl = proc_macro2::TokenStream::new();
+    for (ident, expr) in oids.iter() {
+        if !seen_values.insert(expr.to_token_stream().to_string()) {
+            continue;
+        }
+        enum_variants.extend(quote! { #ident = #expr, });
+        from_impl.extend(quote! { #expr => Ok(BuiltinOid::#ident), });
+    }
 
     quote! {
         use crate::{NotBuiltinOid};
